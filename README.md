@@ -12,7 +12,7 @@ Este projeto consiste em uma aplicação web interativa desenvolvida em **Stream
 
 * **Dashboard Interativo:** Controle total sobre a linha monitorada e a janela de tempo do rastro via interface lateral (sidebar).
 * **Lógica de Janela Deslizante (Sliding Window):** Visualização focada no deslocamento recente, calculada pela fórmula:
-  $$T_{window} = [T_{now} - \Delta t, T_{now}]$$
+  $$T_{intervalo} = [T_{agr} - \Delta t, T_{agr}]$$
 * **Identificação Visual de Frota:**
     * **Rastro Vetorial:** Polilinhas coloridas (paleta de 18 cores) que conectam o trajeto histórico.
     * **Interação via Hover:** Uso de *tooltips* para exibir o identificador (`ordem`) do veículo sem poluir o mapa.
