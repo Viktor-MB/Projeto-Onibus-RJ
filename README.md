@@ -56,6 +56,7 @@ Durante a fase de testes com a linha **202 (Rio Comprido x Castelo)** e trajetos
     ```
 3.  **Inicie a Aplicação:**
     ```bash
+    cd app
     streamlit run app.py
     ```
 
