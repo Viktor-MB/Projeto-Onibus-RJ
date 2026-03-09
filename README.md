@@ -1,5 +1,7 @@
 # 🚌 RioBusTracker-Streamlit
 
+## Link para o app: https://projeto-onibus-rj.streamlit.app/
+
 ### 📍 Monitoramento e Visualização Dinâmica da Frota SPPO (Rio de Janeiro)
 
 Este projeto consiste em uma aplicação web interativa desenvolvida em **Streamlit** para o rastreamento em tempo real dos ônibus do Rio de Janeiro. A solução utiliza dados da API pública `dados.mobilidade.rio` para processar trajetórias e identificar padrões de deslocamento urbano através de uma interface geoespacial intuitiva.
