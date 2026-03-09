@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
 import sys, os
+
+# Ajuste de caminhos para estilos locais
 sys.path.insert(0, os.path.dirname(__file__))
 from styles import get_theme, inject_css
 
@@ -40,11 +42,31 @@ st.markdown(inject_css(T), unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 #  FUNÇÕES DE DADOS
-#  (definidas ANTES da sidebar para evitar NameError)
 # ─────────────────────────────────────────────
+
+@st.cache_data(ttl=300)
+def buscar_todas_as_linhas():
+    """Busca todas as linhas ativas nos últimos 15 min para o seletor."""
+    agora = datetime.now(FUSO)
+    inicio = agora - timedelta(minutes=15)
+    params = {
+        "dataInicial": inicio.strftime('%Y-%m-%d %H:%M:%S'),
+        "dataFinal": agora.strftime('%Y-%m-%d %H:%M:%S')
+    }
+    try:
+        r = requests.get("https://dados.mobilidade.rio/gps/sppo", params=params, timeout=15)
+        df = pd.DataFrame(r.json())
+        if df.empty: return []
+        # Ordenação numérica inteligente (converte para int se possível)
+        linhas = sorted(df['linha'].unique().tolist(), key=lambda x: int(x) if str(x).isdigit() else 999)
+        return [str(l) for l in linhas]
+    except:
+        return []
+
 @st.cache_data(ttl=10)
 def buscar_dados(linha, minutos):
     """Busca rastro histórico de uma linha na janela de tempo definida."""
+    if not linha or "Selecione" in str(linha): return None
     agora  = datetime.now(FUSO)
     inicio = agora - timedelta(minutes=minutos)
     params = {
@@ -65,10 +87,10 @@ def buscar_dados(linha, minutos):
     except:
         return None
 
-
 @st.cache_data(ttl=30)
 def buscar_ordens(linha):
     """Busca todas as ordens ativas de uma linha nos últimos 30 min."""
+    if not linha or "Selecione" in str(linha): return None
     agora  = datetime.now(FUSO)
     inicio = agora - timedelta(minutes=30)
     params = {
@@ -94,10 +116,10 @@ def buscar_ordens(linha):
     except:
         return None
 
-
 @st.cache_data(ttl=15)
 def listar_ordens_sidebar(linha, minutos):
     """Retorna lista de ordens únicas da linha para o selectbox da sidebar."""
+    if not linha or "Selecione" in str(linha): return []
     dados = buscar_dados(linha, minutos)
     if dados is None or dados.empty:
         return []
@@ -115,36 +137,49 @@ with st.sidebar:
 
     st.markdown('<div class="section-title">Configurar Rastreio</div>', unsafe_allow_html=True)
 
-    linha_alvo     = st.text_input("Número da Linha", value="202")
+    # 🛠️ FUNCIONALIDADE: DROPDOWN COM OPÇÃO INICIAL VAZIA
+    lista_linhas = buscar_todas_as_linhas()
+    opcoes_dropdown = ["🔍 Selecione uma linha..."] + lista_linhas
+
+    linha_alvo = st.selectbox(
+        "Selecione ou Digite a Linha",
+        options=opcoes_dropdown,
+        index=0,
+        help="As linhas são carregadas em tempo real conforme a operação ativa."
+    )
+
     minutos_janela = st.slider("Janela de Histórico (min)", 5, 60, 15)
     refresh_rate   = st.select_slider("Auto-Refresh (seg)", options=[15, 30, 60], value=30)
 
-    # ── Filtro de ordem — selectbox populado da API ──
     st.markdown('<div class="section-title" style="margin-top:20px;">Filtrar Veículo</div>', unsafe_allow_html=True)
 
-    ordens_sidebar = listar_ordens_sidebar(linha_alvo, minutos_janela)
-
-    if ordens_sidebar:
-        ordens_selecionadas = st.multiselect(
-            "Ordens",
-            options=ordens_sidebar,
-            default=[],
-            placeholder="Todos os veículos",
-            label_visibility="collapsed",
-        )
-        filtro_ordens = ordens_selecionadas  # lista vazia = todos
-        st.markdown(
-            f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
-            f'color:{T["subtitle_color"]};letter-spacing:0.08em;margin-top:-8px;">'
-            f'{len(ordens_sidebar)} ORDEM(S) ATIVAS</div>',
-            unsafe_allow_html=True
-        )
+    # Só tenta listar ordens se uma linha válida for escolhida
+    if linha_alvo != "🔍 Selecione uma linha...":
+        ordens_sidebar = listar_ordens_sidebar(linha_alvo, minutos_janela)
+        if ordens_sidebar:
+            ordens_selecionadas = st.multiselect(
+                "Ordens",
+                options=ordens_sidebar,
+                default=[],
+                placeholder="Todos os veículos",
+                label_visibility="collapsed",
+            )
+            filtro_ordens = ordens_selecionadas  
+            st.markdown(
+                f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
+                f'color:{T["subtitle_color"]};letter-spacing:0.08em;margin-top:-8px;">'
+                f'{len(ordens_sidebar)} ORDEM(S) ATIVAS</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
+                f'color:{T["subtitle_color"]};letter-spacing:0.08em;">SEM DADOS AINDA</div>',
+                unsafe_allow_html=True
+            )
+            filtro_ordens = []
     else:
-        st.markdown(
-            f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
-            f'color:{T["subtitle_color"]};letter-spacing:0.08em;">SEM DADOS AINDA</div>',
-            unsafe_allow_html=True
-        )
+        st.info("Escolha uma linha acima.")
         filtro_ordens = []
 
     st.markdown('<div class="section-title" style="margin-top:24px;">Aparência</div>', unsafe_allow_html=True)
@@ -163,7 +198,27 @@ with st.sidebar:
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
 # ─────────────────────────────────────────────
-#  HEADER PRINCIPAL
+#  LOGICA DE BLOQUEIO / ESTADO INICIAL
+# ─────────────────────────────────────────────
+if linha_alvo == "🔍 Selecione uma linha...":
+    st.markdown(f"""
+    <div style="margin-top:100px; padding:60px; text-align:center; border:1px dashed {T['empty_border']}; border-radius:12px; background:{T['card_bg']}30;">
+        <div style="font-family:'Share Tech Mono',monospace; font-size:50px; color:{T['accent']}; margin-bottom:20px;">⚡</div>
+        <h2 style="font-family:'Barlow Condensed',sans-serif; color:{T['title_color']}; text-transform:uppercase; letter-spacing:0.05em;">
+            Pronto para monitorar
+        </h2>
+        <p style="font-family:'Barlow',sans-serif; color:{T['subtitle_color']}; font-size:16px;">
+            Utilize o seletor na <b>barra lateral esquerda</b> para escolher uma linha ativa no sistema SPPO-RJ.
+        </p>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:10px; color:{T['accent']}; margin-top:30px; letter-spacing:0.2em; opacity:0.6;">
+            SISTEMA AGUARDANDO COMANDO · RIOBUS v2.0
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop() # Interrompe a execução aqui
+
+# ─────────────────────────────────────────────
+#  PROCESSAMENTO DE DADOS (Só roda se linha for selecionada)
 # ─────────────────────────────────────────────
 agora_str = datetime.now(FUSO).strftime('%H:%M:%S')
 
@@ -178,18 +233,14 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-#  DADOS PRINCIPAIS
-# ─────────────────────────────────────────────
-dados_bus = buscar_dados(linha_alvo, minutos_janela)
+dados_bus_full = buscar_dados(linha_alvo, minutos_janela)
 
-if dados_bus is not None and not dados_bus.empty:
+if dados_bus_full is not None and not dados_bus_full.empty:
 
-    # ── Aplica filtro de ordem ─────────────────
     if filtro_ordens:
-        dados_filtrados = dados_bus[dados_bus['ordem'].isin(filtro_ordens)].copy()
+        dados_filtrados = dados_bus_full[dados_bus_full['ordem'].isin(filtro_ordens)].copy()
     else:
-        dados_filtrados = dados_bus.copy()
+        dados_filtrados = dados_bus_full.copy()
 
     filtro_ativo = len(filtro_ordens) > 0
 
@@ -197,7 +248,7 @@ if dados_bus is not None and not dados_bus.empty:
     lat_media = (dados_filtrados['datahora_envio_dt'] - dados_filtrados['datahora_dt']).dt.total_seconds().mean()
     vel_media = dados_filtrados['velocidade'].mean()
 
-    # ── MÉTRICAS ──────────────────────────────
+    # Badge de filtro
     if filtro_ativo:
         ordens_label = ", ".join(filtro_ordens)
         st.markdown(f"""
@@ -207,10 +258,11 @@ if dados_bus is not None and not dados_bus.empty:
                     padding:6px 14px;margin-bottom:16px;
                     font-family:'Share Tech Mono',monospace;font-size:11px;color:{T['accent']};
                     letter-spacing:0.08em;">
-            🎯 FILTRO ATIVO · {len(filtro_ordens)} ORDEM(S) · {ordens_label}
+            🎯 FILTRO ATIVO · {len(filtro_ordens)} ORDEM(S) SELECIONADA(S)
         </div>
         """, unsafe_allow_html=True)
 
+    # Métricas
     c1, c2, c3 = st.columns(3)
     metrics = [
         (c1, "Ônibus Ativos",    str(n_onibus),   "veículos em operação"),
@@ -230,14 +282,12 @@ if dados_bus is not None and not dados_bus.empty:
 
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
-    # ── TABS ──────────────────────────────────
     tab_mapa, tab_dados, tab_ordens = st.tabs([
         "▶  Mapa de Rastros",
         "≡  Auditoria da Frota",
         "🔍  Buscar Ordens",
     ])
 
-    # ── TAB 1: MAPA ───────────────────────────
     with tab_mapa:
         mapa_center = [dados_filtrados['latitude'].mean(), dados_filtrados['longitude'].mean()]
         m = folium.Map(location=mapa_center, zoom_start=14, tiles=T["map_tiles"])
@@ -261,12 +311,6 @@ if dados_bus is not None and not dados_bus.empty:
                     tooltip=f"🕒 {row['datahora_dt'].strftime('%H:%M:%S')} · ID {ordem}"
                 ).add_to(m)
 
-            folium.Marker(
-                coords[0],
-                tooltip=f"Início · {ordem}",
-                icon=folium.Icon(color='white', icon_color=T["accent"], icon='play', prefix='fa')
-            ).add_to(m)
-
             ultima = trajetoria.iloc[-1]
             folium.Marker(
                 [ultima['latitude'], ultima['longitude']],
@@ -279,12 +323,7 @@ if dados_bus is not None and not dados_bus.empty:
             <div class="map-header">
                 <div>
                     <div class="map-header-title">🗺 Rastro Temporal · Linha {linha_alvo}</div>
-                    <div class="map-header-meta">Janela: {minutos_janela} min · {n_onibus} veículos · Zoom 14</div>
-                </div>
-                <div style="display:flex;gap:16px;align-items:center;">
-                    <span class="map-legend-dot"><span class="dot" style="background:{T['accent']};"></span> Principal</span>
-                    <span class="map-legend-dot"><span class="dot" style="background:#4ade80;"></span> Início</span>
-                    <span class="map-legend-dot"><span class="dot" style="background:#94a3b8;"></span> Outros</span>
+                    <div class="map-header-meta">Janela: {minutos_janela} min · {n_onibus} veículos</div>
                 </div>
             </div>
         </div>
@@ -294,203 +333,20 @@ if dados_bus is not None and not dados_bus.empty:
         st_folium(m, width="100%", height=540, returned_objects=[])
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── TAB 2: AUDITORIA ──────────────────────
     with tab_dados:
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        df_display = dados_filtrados.sort_values('datahora_dt', ascending=False)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-        df_display = dados_filtrados[[
-            'ordem', 'datahora_dt', 'datahora_envio_dt', 'velocidade', 'latitude', 'longitude'
-        ]].copy()
-        df_display['atraso'] = (
-            df_display['datahora_envio_dt'] - df_display['datahora_dt']
-        ).dt.total_seconds().astype(int)
-        df_display = df_display.sort_values('datahora_dt', ascending=False)
-
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True,
-            height=480,
-            column_config={
-                "ordem":             st.column_config.TextColumn("ID Veículo", width="small"),
-                "datahora_dt":       st.column_config.DatetimeColumn("Captura GPS", format="HH:mm:ss"),
-                "datahora_envio_dt": st.column_config.DatetimeColumn("Recebido",    format="HH:mm:ss"),
-                "atraso":            st.column_config.NumberColumn("Atraso (s)", format="%d s", width="small"),
-                "velocidade":        st.column_config.ProgressColumn("Velocidade km/h", min_value=0, max_value=100, format="%d"),
-                "latitude":          st.column_config.NumberColumn("Lat", format="%.5f"),
-                "longitude":         st.column_config.NumberColumn("Lon", format="%.5f"),
-            }
-        )
-
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        csv = df_display.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="↓  EXPORTAR CSV",
-            data=csv,
-            file_name=f"sppo_linha{linha_alvo}_{datetime.now(FUSO).strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
-        )
-
-    # ── TAB 3: BUSCAR ORDENS ──────────────────
     with tab_ordens:
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-        st.markdown(f"""
-        <div style="margin-bottom:20px;">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;
-                        color:{T['title_color']};letter-spacing:0.02em;margin-bottom:4px;">
-                Consulta de Frota por Linha
-            </div>
-            <div style="font-family:'Share Tech Mono',monospace;font-size:11px;
-                        color:{T['subtitle_color']};letter-spacing:0.1em;">
-                PESQUISE QUALQUER LINHA SPPO · VEÍCULOS ATIVOS NOS ÚLTIMOS 30 MIN
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        col_input, col_btn = st.columns([3, 1])
-        with col_input:
-            linha_busca = st.text_input(
-                "Linha",
-                placeholder="Ex: 202, 474, 553...",
-                label_visibility="collapsed",
-                key="busca_ordem_input"
-            )
-        with col_btn:
-            buscar = st.button("🔍  Buscar", use_container_width=True, key="btn_buscar_ordens")
-
-        if buscar and linha_busca.strip():
-            with st.spinner(f"Buscando veículos da linha {linha_busca.strip()}..."):
-                df_ordens = buscar_ordens(linha_busca.strip())
-
-            if df_ordens is not None and not df_ordens.empty:
-                total = len(df_ordens)
-
-                st.markdown(f"""
-                <div style="display:flex;align-items:center;gap:12px;
-                            background:{T['accent_15']};border:1px solid {T['accent_40']};
-                            border-left:3px solid {T['accent']};
-                            border-radius:6px;padding:14px 20px;margin:16px 0;">
-                    <div style="font-family:'Barlow Condensed',sans-serif;font-size:36px;
-                                font-weight:700;color:{T['accent']};line-height:1;">{total}</div>
-                    <div>
-                        <div style="font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;
-                                    color:{T['title_color']};">
-                            veículos encontrados na linha {linha_busca.strip().upper()}
-                        </div>
-                        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;
-                                    color:{T['subtitle_color']};letter-spacing:0.1em;margin-top:2px;">
-                            ÚLTIMA ATUALIZAÇÃO · {datetime.now(FUSO).strftime('%H:%M:%S')}
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                ordens_lista = df_ordens['ordem'].tolist()
-                for row_i in range(0, len(ordens_lista), 5):
-                    cols = st.columns(5)
-                    for col_i, ordem in enumerate(ordens_lista[row_i:row_i + 5]):
-                        row_data     = df_ordens[df_ordens['ordem'] == ordem].iloc[0]
-                        vel          = int(row_data['velocidade'])
-                        horario      = row_data['datahora_dt'].strftime('%H:%M:%S')
-                        cor_status   = "#4ade80" if vel > 0 else "#f87171"
-                        label_status = "EM MOVIMENTO" if vel > 0 else "PARADO"
-                        with cols[col_i]:
-                            st.markdown(f"""
-                            <div style="background:{T['card_bg']};border:1px solid {T['card_border']};
-                                        border-top:2px solid {cor_status};border-radius:8px;
-                                        padding:14px 16px;margin-bottom:8px;">
-                                <div style="font-family:'Share Tech Mono',monospace;font-size:10px;
-                                            color:{T['label_color']};letter-spacing:0.1em;margin-bottom:6px;">
-                                    ORDEM
-                                </div>
-                                <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
-                                            font-weight:700;color:{T['accent']};line-height:1;margin-bottom:8px;">
-                                    {ordem}
-                                </div>
-                                <div style="font-family:'Barlow',sans-serif;font-size:12px;
-                                            color:{T['subtitle_color']};margin-bottom:4px;">
-                                    🚀 {vel} km/h
-                                </div>
-                                <div style="font-family:'Share Tech Mono',monospace;font-size:10px;
-                                            color:{cor_status};letter-spacing:0.06em;font-weight:700;">
-                                    ● {label_status}
-                                </div>
-                                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;
-                                            color:{T['label_color']};margin-top:4px;opacity:0.7;">
-                                    {horario}
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                st.markdown(f'<div class="section-title">Lista Completa · {total} veículos</div>', unsafe_allow_html=True)
-
-                df_ordens_display = df_ordens.rename(columns={
-                    'ordem':       'ID Veículo',
-                    'datahora_dt': 'Última Captura',
-                    'velocidade':  'Velocidade (km/h)',
-                    'linha':       'Linha',
-                })
-                st.dataframe(
-                    df_ordens_display,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=min(400, 56 + total * 35),
-                    column_config={
-                        "ID Veículo":        st.column_config.TextColumn(width="small"),
-                        "Última Captura":    st.column_config.DatetimeColumn(format="HH:mm:ss"),
-                        "Velocidade (km/h)": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%d"),
-                        "Linha":             st.column_config.TextColumn(width="small"),
-                    }
-                )
-
-                csv_ordens = df_ordens_display.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="↓  EXPORTAR ORDENS CSV",
-                    data=csv_ordens,
-                    file_name=f"ordens_linha{linha_busca.strip()}_{datetime.now(FUSO).strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                    key="dl_ordens"
-                )
-
+        st.markdown(f'<div class="section-title">Busca de Ordens Ativas</div>', unsafe_allow_html=True)
+        linha_busca = st.text_input("Digite uma linha para consulta instantânea", key="busca_ordem_input")
+        if st.button("Buscar Frota"):
+            df_ordens = buscar_ordens(linha_busca)
+            if df_ordens is not None:
+                st.table(df_ordens)
             else:
-                st.markdown(f"""
-                <div style="margin-top:24px;padding:40px;text-align:center;
-                            border:1px dashed {T['empty_border']};border-radius:8px;">
-                    <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;
-                                color:{T['empty_text']};font-weight:600;text-transform:uppercase;
-                                letter-spacing:0.08em;">
-                        Nenhum veículo encontrado
-                    </div>
-                    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;
-                                color:{T['empty_sub']};margin-top:8px;letter-spacing:0.1em;">
-                        LINHA {linha_busca.strip().upper()} · SEM DADOS NOS ÚLTIMOS 30 MIN
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.error("Nenhum dado encontrado para esta linha.")
 
-        else:
-            st.markdown(f"""
-            <div style="margin-top:24px;padding:48px;text-align:center;
-                        border:1px dashed {T['empty_border']};border-radius:8px;">
-                <div style="font-family:'Share Tech Mono',monospace;font-size:28px;
-                            color:{T['empty_hex']};margin-bottom:14px;">🔍</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;
-                            color:{T['empty_text']};font-weight:600;text-transform:uppercase;
-                            letter-spacing:0.08em;">
-                    Digite uma linha e clique em Buscar
-                </div>
-                <div style="font-family:'Share Tech Mono',monospace;font-size:11px;
-                            color:{T['empty_sub']};margin-top:8px;letter-spacing:0.1em;">
-                    CONSULTA INDEPENDENTE DO MONITORAMENTO PRINCIPAL
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────
-#  ESTADO VAZIO (sem dados para a linha)
-# ─────────────────────────────────────────────
 else:
     st.markdown(f"""
     <div style="margin-top:60px;padding:48px;text-align:center;
@@ -499,11 +355,11 @@ else:
                     color:{T['empty_hex']};margin-bottom:16px;">⬡</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;
                     color:{T['empty_text']};letter-spacing:0.08em;font-weight:600;text-transform:uppercase;">
-            Sem dados disponíveis
+            Sem sinal de GPS no momento
         </div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:11px;
                     color:{T['empty_sub']};margin-top:8px;letter-spacing:0.12em;">
-            LINHA {linha_alvo} · JANELA {minutos_janela} MIN · AGUARDANDO SINAL
+            LINHA {linha_alvo} · JANELA {minutos_janela} MIN · AGUARDANDO TRANSMISSÃO
         </div>
     </div>
     """, unsafe_allow_html=True)
