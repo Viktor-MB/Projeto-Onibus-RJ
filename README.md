@@ -65,8 +65,6 @@ Durante a fase de testes com a linha **202 (Rio Comprido x Castelo)** e trajetos
 
 **Viktor Mayer Berruezo**
 * Discente de **Ciência de Dados e IA** no **Ibmec**.
-* GPA: 9,36/10.
-* Especialista em automação de fluxos e análise estatística de dados.
 
 ---
 **Dados fornecidos por:** [Escritório de Dados - Prefeitura do Rio de Janeiro](https://dados.mobilidade.rio).

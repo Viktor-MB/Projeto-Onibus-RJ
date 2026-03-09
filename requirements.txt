@@ -5,3 +5,4 @@ requests
 folium
 pytz
 altair>=5.0.0
+streamlit-autorefresh
