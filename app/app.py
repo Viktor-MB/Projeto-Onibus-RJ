@@ -6,8 +6,9 @@ from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 import pytz
 from streamlit_autorefresh import st_autorefresh
-
-from styles import DARK, LIGHT, get_theme, inject_css
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from styles import get_theme, inject_css
 
 # ─────────────────────────────────────────────
 #  CONFIGURAÇÃO DA PÁGINA
@@ -25,7 +26,7 @@ CORES_FOLIUM = [
     'orange', 'blue', 'green', 'purple', 'red',
     'darkred', 'cadetblue', 'darkgreen', 'black',
     'darkblue', 'darkpurple', 'pink', 'lightblue',
-    'lightgreen', 'gray', 'white'
+    'lightgreen', 'lightgray', 'gray', 'beige', 'white'
 ]
 
 # ─────────────────────────────────────────────
@@ -38,37 +39,8 @@ T = get_theme(st.session_state)
 st.markdown(inject_css(T), unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  SIDEBAR
-# ─────────────────────────────────────────────
-with st.sidebar:
-    st.markdown(f"""
-    <div class="sidebar-brand">Rio<span>Bus</span> Monitor</div>
-    <div class="sidebar-version">v2.0 · SPPO-RJ · API MOBILIDADE</div>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div class="section-title">Configurar Rastreio</div>', unsafe_allow_html=True)
-
-    linha_alvo     = st.text_input("Número da Linha", value="202")
-    minutos_janela = st.slider("Janela de Histórico (min)", 5, 60, 15)
-    refresh_rate   = st.select_slider("Auto-Refresh (seg)", options=[15, 30, 60], value=30)
-
-    st.markdown('<div class="section-title" style="margin-top:24px;">Aparência</div>', unsafe_allow_html=True)
-
-    if st.button(f"{T['toggle_icon']}  {T['toggle_label']}", use_container_width=True):
-        st.session_state.tema = "light" if st.session_state.tema == "dark" else "dark"
-        st.rerun()
-
-    st.markdown(f"""
-    <div class="status-pill">
-        <span style="width:6px;height:6px;background:#4ade80;border-radius:50%;display:inline-block;"></span>
-        SISTEMA ATIVO
-    </div>
-    """, unsafe_allow_html=True)
-
-st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
-
-# ─────────────────────────────────────────────
 #  FUNÇÕES DE DADOS
+#  (definidas ANTES da sidebar para evitar NameError)
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=10)
 def buscar_dados(linha, minutos):
@@ -96,7 +68,7 @@ def buscar_dados(linha, minutos):
 
 @st.cache_data(ttl=30)
 def buscar_ordens(linha):
-    """Busca todas as ordens (IDs de veículos) ativas de uma linha nos últimos 30 min."""
+    """Busca todas as ordens ativas de uma linha nos últimos 30 min."""
     agora  = datetime.now(FUSO)
     inicio = agora - timedelta(minutes=30)
     params = {
@@ -122,6 +94,74 @@ def buscar_ordens(linha):
     except:
         return None
 
+
+@st.cache_data(ttl=15)
+def listar_ordens_sidebar(linha, minutos):
+    """Retorna lista de ordens únicas da linha para o selectbox da sidebar."""
+    dados = buscar_dados(linha, minutos)
+    if dados is None or dados.empty:
+        return []
+    return sorted(dados['ordem'].unique().tolist())
+
+
+# ─────────────────────────────────────────────
+#  SIDEBAR
+# ─────────────────────────────────────────────
+with st.sidebar:
+    st.markdown(f"""
+    <div class="sidebar-brand">Rio<span>Bus</span> Monitor</div>
+    <div class="sidebar-version">v2.0 · SPPO-RJ · API MOBILIDADE</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-title">Configurar Rastreio</div>', unsafe_allow_html=True)
+
+    linha_alvo     = st.text_input("Número da Linha", value="202")
+    minutos_janela = st.slider("Janela de Histórico (min)", 5, 60, 15)
+    refresh_rate   = st.select_slider("Auto-Refresh (seg)", options=[15, 30, 60], value=30)
+
+    # ── Filtro de ordem — selectbox populado da API ──
+    st.markdown('<div class="section-title" style="margin-top:20px;">Filtrar Veículo</div>', unsafe_allow_html=True)
+
+    ordens_sidebar = listar_ordens_sidebar(linha_alvo, minutos_janela)
+
+    if ordens_sidebar:
+        ordens_selecionadas = st.multiselect(
+            "Ordens",
+            options=ordens_sidebar,
+            default=[],
+            placeholder="Todos os veículos",
+            label_visibility="collapsed",
+        )
+        filtro_ordens = ordens_selecionadas  # lista vazia = todos
+        st.markdown(
+            f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
+            f'color:{T["subtitle_color"]};letter-spacing:0.08em;margin-top:-8px;">'
+            f'{len(ordens_sidebar)} ORDEM(S) ATIVAS</div>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f'<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;'
+            f'color:{T["subtitle_color"]};letter-spacing:0.08em;">SEM DADOS AINDA</div>',
+            unsafe_allow_html=True
+        )
+        filtro_ordens = []
+
+    st.markdown('<div class="section-title" style="margin-top:24px;">Aparência</div>', unsafe_allow_html=True)
+
+    if st.button(f"{T['toggle_icon']}  {T['toggle_label']}", use_container_width=True):
+        st.session_state.tema = "light" if st.session_state.tema == "dark" else "dark"
+        st.rerun()
+
+    st.markdown(f"""
+    <div class="status-pill">
+        <span style="width:6px;height:6px;background:#4ade80;border-radius:50%;display:inline-block;"></span>
+        SISTEMA ATIVO
+    </div>
+    """, unsafe_allow_html=True)
+
+st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
+
 # ─────────────────────────────────────────────
 #  HEADER PRINCIPAL
 # ─────────────────────────────────────────────
@@ -145,11 +185,32 @@ dados_bus = buscar_dados(linha_alvo, minutos_janela)
 
 if dados_bus is not None and not dados_bus.empty:
 
-    n_onibus   = len(dados_bus['ordem'].unique())
-    lat_media  = (dados_bus['datahora_envio_dt'] - dados_bus['datahora_dt']).dt.total_seconds().mean()
-    vel_media  = dados_bus['velocidade'].mean()
+    # ── Aplica filtro de ordem ─────────────────
+    if filtro_ordens:
+        dados_filtrados = dados_bus[dados_bus['ordem'].isin(filtro_ordens)].copy()
+    else:
+        dados_filtrados = dados_bus.copy()
+
+    filtro_ativo = len(filtro_ordens) > 0
+
+    n_onibus  = len(dados_filtrados['ordem'].unique())
+    lat_media = (dados_filtrados['datahora_envio_dt'] - dados_filtrados['datahora_dt']).dt.total_seconds().mean()
+    vel_media = dados_filtrados['velocidade'].mean()
 
     # ── MÉTRICAS ──────────────────────────────
+    if filtro_ativo:
+        ordens_label = ", ".join(filtro_ordens)
+        st.markdown(f"""
+        <div style="display:inline-flex;align-items:center;gap:8px;
+                    background:{T['accent_15']};border:1px solid {T['accent_40']};
+                    border-left:3px solid {T['accent']};border-radius:4px;
+                    padding:6px 14px;margin-bottom:16px;
+                    font-family:'Share Tech Mono',monospace;font-size:11px;color:{T['accent']};
+                    letter-spacing:0.08em;">
+            🎯 FILTRO ATIVO · {len(filtro_ordens)} ORDEM(S) · {ordens_label}
+        </div>
+        """, unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns(3)
     metrics = [
         (c1, "Ônibus Ativos",    str(n_onibus),   "veículos em operação"),
@@ -178,10 +239,10 @@ if dados_bus is not None and not dados_bus.empty:
 
     # ── TAB 1: MAPA ───────────────────────────
     with tab_mapa:
-        mapa_center = [dados_bus['latitude'].mean(), dados_bus['longitude'].mean()]
+        mapa_center = [dados_filtrados['latitude'].mean(), dados_filtrados['longitude'].mean()]
         m = folium.Map(location=mapa_center, zoom_start=14, tiles=T["map_tiles"])
 
-        for i, (ordem, trajetoria) in enumerate(dados_bus.groupby('ordem')):
+        for i, (ordem, trajetoria) in enumerate(dados_filtrados.groupby('ordem')):
             cor    = CORES_FOLIUM[i % len(CORES_FOLIUM)]
             coords = trajetoria[['latitude', 'longitude']].values.tolist()
 
@@ -237,7 +298,7 @@ if dados_bus is not None and not dados_bus.empty:
     with tab_dados:
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-        df_display = dados_bus[[
+        df_display = dados_filtrados[[
             'ordem', 'datahora_dt', 'datahora_envio_dt', 'velocidade', 'latitude', 'longitude'
         ]].copy()
         df_display['atraso'] = (
@@ -305,7 +366,6 @@ if dados_bus is not None and not dados_bus.empty:
             if df_ordens is not None and not df_ordens.empty:
                 total = len(df_ordens)
 
-                # Banner de resultado
                 st.markdown(f"""
                 <div style="display:flex;align-items:center;gap:12px;
                             background:{T['accent_15']};border:1px solid {T['accent_40']};
@@ -326,7 +386,6 @@ if dados_bus is not None and not dados_bus.empty:
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Grid de cards (5 por linha)
                 ordens_lista = df_ordens['ordem'].tolist()
                 for row_i in range(0, len(ordens_lista), 5):
                     cols = st.columns(5)
@@ -364,7 +423,6 @@ if dados_bus is not None and not dados_bus.empty:
                             </div>
                             """, unsafe_allow_html=True)
 
-                # Tabela completa
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                 st.markdown(f'<div class="section-title">Lista Completa · {total} veículos</div>', unsafe_allow_html=True)
 

@@ -141,7 +141,61 @@ html, body, [class*="css"] {{
     border-radius: 4px !important;
 }}
 
-/* ── Sliders ── */
+/* ── Multiselect (Filtrar Veículo) ── */
+[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+    background: {T['input_bg']} !important;
+    border: 1px solid {T['input_border']} !important;
+    border-radius: 4px !important;
+}}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div:focus-within {{
+    border-color: {T['accent']} !important;
+    box-shadow: 0 0 0 2px {T['accent_25']} !important;
+}}
+
+/* Tags das ordens selecionadas */
+[data-testid="stSidebar"] [data-baseweb="tag"] {{
+    background: {T['accent_25']} !important;
+    border: 1px solid {T['accent_40']} !important;
+    border-radius: 3px !important;
+}}
+
+[data-testid="stSidebar"] [data-baseweb="tag"] span {{
+    color: {T['accent']} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+}}
+
+/* Ícone X de remover tag */
+[data-testid="stSidebar"] [data-baseweb="tag"] [role="presentation"] svg {{
+    fill: {T['accent']} !important;
+}}
+
+/* Placeholder e texto digitado */
+[data-testid="stSidebar"] [data-baseweb="select"] input {{
+    color: {T['title_color']} !important;
+    font-family: 'Barlow', sans-serif !important;
+    font-size: 13px !important;
+}}
+
+/* Dropdown de opções */
+[data-baseweb="popover"] ul {{
+    background: {T['card_bg']} !important;
+    border: 1px solid {T['card_border']} !important;
+    border-radius: 6px !important;
+}}
+
+[data-baseweb="popover"] li {{
+    color: {T['title_color']} !important;
+    font-family: 'Barlow', sans-serif !important;
+    font-size: 13px !important;
+}}
+
+[data-baseweb="popover"] li:hover {{
+    background: {T['accent_15']} !important;
+    color: {T['accent']} !important;
+}}
 [data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"] {{
     background-color: {T['accent']} !important;
     border-color: {T['accent']} !important;
