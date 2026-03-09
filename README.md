@@ -66,7 +66,7 @@ Durante a fase de testes com a linha **202 (Rio Comprido x Castelo)** e trajetos
 
 **Viktor Mayer Berruezo**
 * Discente de **Ciência de Dados e IA** no **Ibmec**.}
-* [Relatório do Projeto](https://docs.google.com/document/d/1GUIKU1AaDyPoLxdvRMlCLnGwlwVGoeArYItLC4JwTiY/edit?tab=t.0) * 
+* [Relatório do Projeto](https://docs.google.com/document/d/1GUIKU1AaDyPoLxdvRMlCLnGwlwVGoeArYItLC4JwTiY/edit?tab=t.0) 
 
 
 
