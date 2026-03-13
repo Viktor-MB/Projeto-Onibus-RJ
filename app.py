@@ -12,9 +12,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from styles import get_theme, inject_css
 
-# ─────────────────────────────────────────────
-#  CONFIGURAÇÃO DA PÁGINA
-# ─────────────────────────────────────────────
+# Configurações iniciais da página
 st.set_page_config(
     page_title="RioBus Monitoramento",
     page_icon="🚌",
