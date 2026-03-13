@@ -31,19 +31,15 @@ CORES_FOLIUM = [
     'darkpurple', 'pink', 'lightblue', 'lightgreen', 'gray', 'black'
 ]
 
-# ─────────────────────────────────────────────
-#  TEMA
-# ─────────────────────────────────────────────
+# Inicializa o tema do Streamlit
 if "tema" not in st.session_state:
     st.session_state.tema = "dark"
 
 T = get_theme(st.session_state)
 st.markdown(inject_css(T), unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-#  FUNÇÕES DE ENGENHARIA DE DADOS
-# ─────────────────────────────────────────────
 
+# Engenharia de dados com cache para otimizar chamadas à API e processamento
 @st.cache_data(ttl=300)
 def buscar_todas_as_linhas():
     """Busca todas as linhas operantes nos últimos 15 min para o seletor."""
@@ -99,9 +95,7 @@ def listar_ordens_sidebar(linha, minutos):
     if dados is None or dados.empty: return []
     return sorted(dados['ordem'].unique().tolist())
 
-# ─────────────────────────────────────────────
-#  SIDEBAR
-# ─────────────────────────────────────────────
+#Inicialização da barra lateral com opções de configuração e filtros
 with st.sidebar:
     st.markdown('<div class="sidebar-brand">Rio<span>Bus</span> Monitoramento</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Configurar Rastreio</div>', unsafe_allow_html=True)
@@ -137,9 +131,7 @@ with st.sidebar:
         st.session_state.tema = "light" if st.session_state.tema == "dark" else "dark"
         st.rerun()
 
-# ─────────────────────────────────────────────
-#  LOGICA DE BLOQUEIO / TELA INICIAL
-# ─────────────────────────────────────────────
+# Verificação de seleção de linha para exibir mensagem de boas-vindas ou instruções
 if linha_alvo == "🔍 Selecione uma linha...":
     st.markdown(f"""
     <div style="margin-top:100px; padding:60px; text-align:center; border:1px dashed {T['empty_border']}; border-radius:12px; background:{T['card_bg']}30;">
@@ -154,9 +146,8 @@ if linha_alvo == "🔍 Selecione uma linha...":
     """, unsafe_allow_html=True)
     st.stop()
 
-# ─────────────────────────────────────────────
-#  HEADER E DADOS PRINCIPAIS
-# ─────────────────────────────────────────────
+
+#Header principal com badge de transmissão ao vivo e timestamp atualizado
 agora_str = datetime.now(FUSO).strftime('%H:%M:%S')
 st.markdown(f"""
 <div class="main-header">
@@ -185,7 +176,7 @@ if dados_full is not None and not dados_full.empty:
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
     tab_mapa, tab_dados, tab_ordens = st.tabs(["▶ Mapa de Rastros", "≡ Auditoria", "🔍 Buscar Ordens"])
 
-    # --- ABA 1: MAPA ---
+    # Mapa
     with tab_mapa:
         mapa_center = [dados_bus['latitude'].mean(), dados_bus['longitude'].mean()]
         m = folium.Map(location=mapa_center, zoom_start=14, tiles=T["map_tiles"])
